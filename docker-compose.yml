@@ -1,0 +1,49 @@
+version: '1'
+
+services:
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:latest
+    ports:
+      - "5672:5672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+
+  model_server:
+    build:
+      context: ./
+      dockerfile: ./docker/model_server/Dockerfile
+    image: model_server:0.0
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+      - rabbitmq
+    environment:
+      - BROKER_URI=${BROKER_URI}
+      - BACKEND_URI=${BACKEND_URI}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./models:/models
+      - ~/.ssh:/root/.ssh
+
+  worker:
+    build:
+      context: ./
+      dockerfile: ./docker/model_server/Dockerfile
+    command: celery -A ml_worker_app.worker worker --loglevel=INFO --concurrency=2
+    environment:
+      - BROKER_URI=${BROKER_URI}
+      - BACKEND_URI=${BACKEND_URI}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - model_server
+      - redis
+    volumes:
+      - ./models:/models
+      - ~/.ssh:/root/.ssh
